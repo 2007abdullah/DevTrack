@@ -75,7 +75,7 @@ On start the backend container runs `alembic upgrade head` and, when `SEED_DEMO_
 
 ## Local development (without Docker)
 
-**Database:** start PostgreSQL and create a `devtrack` database/user (or run only the DB with `docker compose up db`).
+**Database:** start PostgreSQL and create a `devtrack` database/user, or run only the database container with `docker compose up -d db`.
 
 **Backend**
 
@@ -97,6 +97,8 @@ cd frontend
 npm install
 npm run dev                       # http://localhost:5173, proxies /api to :8000
 ```
+
+On Windows PowerShell, run the commands from the repository root with `Set-Location devtrack\backend` and activate using `.\venv\Scripts\Activate.ps1`; for the frontend use `Set-Location ..\frontend`.
 
 ## Database migrations
 
@@ -126,12 +128,19 @@ cd frontend && npm test        # unit tests for formatting and error helpers
 
 Send the token from `/api/auth/login` as `Authorization: Bearer <token>`. Errors use `{"detail": "..."}`; validation errors (`422`) also include an `errors` array of `{field, message}`.
 
-## Deployment
+## Deployment (Vercel + Render)
 
-1. Build and push the two images (`backend/Dockerfile`, `frontend/Dockerfile`) to a registry.
-2. Provision managed PostgreSQL and set `DATABASE_URL`, a strong `SECRET_KEY`, and `CORS_ORIGINS` to your frontend's public origin.
-3. Build the frontend image with `--build-arg VITE_API_URL=https://api.your-domain.com`.
-4. Terminate TLS in front of both services, set `SEED_DEMO_DATA=false`, and run behind a process manager or container platform (Fly.io, Render, ECS, Cloud Run, etc.). The backend applies migrations on start.
+The frontend is a Vite static site hosted on Vercel. The FastAPI container and managed PostgreSQL database are provisioned together on Render by the root `render.yaml` Blueprint. Render runs the Alembic migrations when the API container starts. These hosted services are separate from your local Docker Compose stack.
+
+1. Push this repository to GitHub.
+2. In Render, create a new **Blueprint** from the repository and apply `render.yaml`. This creates the `devtrack-api` web service and `devtrack-db` PostgreSQL database. Wait for the API deploy to finish, then confirm `https://<render-service>.onrender.com/health` returns `{"status":"ok","database":"up"}`.
+3. In Vercel, import the same repository and set the **Root Directory** to `frontend`. Add the build-time environment variable `VITE_API_URL` with the Render API base URL, for example `https://devtrack-api.onrender.com` (no trailing slash), then deploy.
+4. In the Render `devtrack-api` environment settings, change `CORS_ORIGINS` to the exact production Vercel origin, for example `https://devtrack.vercel.app` (no trailing slash). Include additional comma-separated origins only when needed, then redeploy the API.
+5. Open the Vercel URL, register a user, and create a project/task. Do not enable demo seeding or use the development demo account in production.
+
+The Blueprint generates a strong `SECRET_KEY`, disables demo seeding, and connects the API to the managed database. Set `VITE_API_URL` in Vercel before building; Vite embeds it into the frontend bundle. The free/paid tiers and database availability depend on provider plans, so check current pricing before applying the Blueprint. Keep `DATABASE_URL` private and never put it in Vercel's frontend environment.
+
+Vercel preview deployments have different origins. If you need to use previews, add each preview's exact origin to `CORS_ORIGINS` or use a stable custom domain; this app currently allows explicit origins rather than a wildcard.
 
 ## CI/CD
 

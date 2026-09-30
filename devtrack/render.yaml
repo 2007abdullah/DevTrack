@@ -1,0 +1,27 @@
+databases:
+  - name: devtrack-db
+    databaseName: devtrack
+    user: devtrack
+    plan: basic-256mb
+    region: ohio
+
+services:
+  - type: web
+    name: devtrack-api
+    runtime: docker
+    plan: starter
+    region: ohio
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: devtrack-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: http://localhost:5173,http://localhost:3000
+      - key: SEED_DEMO_DATA
+        value: "false"
